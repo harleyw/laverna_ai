@@ -281,6 +281,12 @@
       "css": "cog",
       "code": 59398,
       "src": "elusive"
+    },
+    {
+      "uid": "ff70f7b3228702e0d590e60ed3b90bea",
+      "css": "magic",
+      "code": 61648,
+      "src": "fontawesome"
     }
   ]
 }
