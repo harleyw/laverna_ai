@@ -33,6 +33,10 @@
     border-bottom : 1px solid rgb(229, 229, 229);
     padding       : 6px 0;
 
+    .editor--btns[data-redo-group] + .editor--btns[data-ai-summary-group] {
+        margin-left: 100px;
+    }
+
     &.-fixed {
         &:extend(.navbar-static-top);
         position    : fixed;
@@ -80,6 +84,8 @@
     .editor--bar {
         &:extend(.navbar-fixed-top);
         top: @navbar-height;
+
+
     }
 
     /**
