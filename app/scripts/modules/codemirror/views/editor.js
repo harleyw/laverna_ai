@@ -34,9 +34,14 @@ define([
 
         initialize: function() {
             this.options.mode = Radio.request('configs', 'get:config', 'editMode');
+            this.iconStates = {};
 
             this.listenTo(this, 'editor:change', this.onEditorChange);
             this.listenTo(this, 'change:mode', this.onChangeMode);
+            this.listenTo(Radio.channel('editor'), 'editor:action', (action) => {
+                const e = { currentTarget: $(`.editor--btns .btn[data-action="${action}"]`) };
+                this.triggerAction(e);
+            });
 
             this.$layoutBody = $('.layout--body.-scroll.-form');
             this.$layoutBody.on('scroll', _.bind(this.onScroll, this));
@@ -89,12 +94,31 @@ define([
         },
 
         triggerAction: function(e) {
-            e.preventDefault();
-            var action = $(e.currentTarget).attr('data-action');
+            if (e && typeof e.preventDefault === 'function') {
+                e.preventDefault();
+            }
+            var $btn = $(e.currentTarget);
+            var action = $btn.attr('data-action');
+            var $icon = $btn.find('i');
+            
+            console.log('Step into triggerAction with action ', action);
 
-            if (action) {
+            // 定义 recordStart 按钮的图标对
+            if (action === 'recordStart') {
+                this.iconStates[action] = !this.iconStates[action];
+                if (this.iconStates[action]) {
+                    console.log('recordStart icon is changed to icon-play-circled2');
+                    $icon.attr('class', 'icon-play-circled2');
+                } else {
+                    console.log('recordStart icon is changed to icon-play-circled');
+                    $icon.attr('class', 'icon-play-circled');
+                }
+            }
+
+            if (action && e && typeof e.preventDefault === 'function') {
                 this.trigger('editor:action', action);
             }
+            console.log('Step out triggerAction with action ', action);
         },
 
         /**

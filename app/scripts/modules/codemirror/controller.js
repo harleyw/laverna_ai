@@ -19,7 +19,8 @@ define([
     'codemirror/addon/mode/overlay',
     'codemirror/keymap/vim',
     'codemirror/keymap/emacs',
-    'codemirror/keymap/sublime'
+    'codemirror/keymap/sublime',
+    'recordrtc'
 ], function(_, $, Marionette, Radio, CodeMirror, View) {
     'use strict';
 
@@ -61,7 +62,7 @@ define([
         },
 
         initialize: function() {
-            _.bindAll(this, 'onChange', 'onScroll', 'onCursor', 'boldAction', 'italicAction', 'linkAction', 'headingAction', 'attachmentAction', 'codeAction', 'hrAction', 'listAction', 'numberedListAction');
+            _.bindAll(this, 'onChange', 'onScroll', 'onCursor', 'boldAction', 'italicAction', 'linkAction', 'headingAction', 'attachmentAction', 'codeAction', 'hrAction', 'listAction', 'numberedListAction', 'recordStartAction', 'aiSummaryAction');
 
             // Get configs
             this.configs = Radio.request('configs', 'get:object');
@@ -85,7 +86,8 @@ define([
             Radio.reply('editor', {
                 'get:data'      : this.getData,
                 'generate:link' : this.generateLink,
-                'generate:image': this.generateImage
+                'generate:image': this.generateImage,
+                'ai:summary:recording': this.getRecording
             }, this);
 
 			// Init footer to show current line numbers
@@ -175,11 +177,91 @@ define([
 
             return Radio.request('markdown', 'render', _.extend({}, data, {
                 attributes: {
-                    content: this.editor.getValue()
+                content: this.editor.getValue()
                 }
-            }))
-            .then(function(content) {
+        }))
+        .then(function(content) {
                 self.view.trigger('editor:change', content);
+            });
+        },
+
+        /**
+         * Start recording using RecordRTC.
+         */
+        recordStartAction: function() {
+            console.log('Step into recordStartAction');
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then((stream) => {
+                    if (this.recorder) {
+                        console.log('recorder state: ', this.recorder.getState());
+                        if(this.recorder.getState() === 'recording') {
+                            console.log('Stop recording');
+                            this.recorder.stopRecording();
+                            this.recorder.destroy();
+                            this.recorder = null;
+                            Radio.trigger('editor', 'ai:summary:recording:stop');
+                        }
+                    } else {
+                        this.recorder = new RecordRTC(stream, {
+                            type: 'audio'
+                        });
+                        console.log('Start recording');
+                        this.recorder.startRecording();
+                        Radio.trigger('editor', 'ai:summary:recording:start');
+                    }
+
+                })
+                .catch((error) => {
+                    console.error('Error accessing microphone:', error);
+                    Radio.trigger('editor', 'ai:summary:recording:error', error);
+                });
+        },
+
+        /**
+         * Get the recorded audio.
+         */
+        getRecording: function() {
+            console.log('Step into getRecording');
+            if (this.recorder) {
+                return new Promise((resolve) => {
+                    this.recorder.stopRecording(() => {
+                        const blob = this.recorder.getBlob();
+                        resolve(blob);
+                        this.recorder.destroy();
+                        this.recorder = null;
+                        Radio.trigger('editor', 'ai:summary:recording:stop');
+                    });
+                });
+            }
+            return Promise.resolve(null);
+        },
+
+        aiSummaryAction: function() {
+            console.log('Step into aiSummaryAction');
+            this.getRecording().then((blob) => {
+                if (blob) {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    const now = new Date();
+                    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+                    a.download = `recording_${timestamp}.mp3`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    // TODO: 将生成的 MP3 文件 attach 到 editor 中
+                    //const file = new File([blob], `recording_${timestamp}.mp3`, { type: 'audio/mpeg' });
+                    // Radio.request('editor', 'attach:file', file);
+
+                    // 触发 recordStart 图标切换
+                    console.log('Send event record state change');
+                    Radio.trigger('editor', 'editor:action', 'recordStart');
+                } else {
+                    console.error('No recording available');
+                }
             });
         },
 

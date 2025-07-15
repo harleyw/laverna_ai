@@ -79,6 +79,7 @@ requirejs.config({
         toBlob                : '../bower_components/blueimp-canvas-to-blob/js/canvas-to-blob',
         blobjs                : '../bower_components/Blob/Blob',
         fileSaver             : '../bower_components/FileSaver/FileSaver',
+        recordrtc             : '../bower_components/recordrtc/RecordRTC.min',
         enquire               : '../bower_components/enquire/dist/enquire.min',
         hammerjs              : '../bower_components/hammerjs/hammer',
         jHammer               : '../bower_components/jquery-hammerjs/jquery.hammer',
@@ -104,6 +105,9 @@ requirejs.config({
         },
         fileSaver: {
             exports: 'saveAs',
+        },
+        recordrtc: { 
+            exports: 'RecordRTC'
         },
         backbone: {
             deps: ['underscore', 'jquery'],
