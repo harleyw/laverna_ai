@@ -20,6 +20,21 @@ define(['underscore'], function (_) {
     constants.DROPBOX_KEY = '10iirspliqts95d';
     constants.DROPBOX_SECRET = null;
 
+    // 阿里云OSS配置
+    constants.OSS_REGION = 'oss-cn-chengdu';
+    constants.OSS_ACCESS_KEY_ID = 'aaa';
+    constants.OSS_ACCESS_KEY_SECRET = 'bbb';
+    constants.OSS_BUCKET = 'notebook-ai';
+
+    // 通义千问Paraformer配置
+    constants.PARAFORMER_API_URL = 'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription';
+    constants.PARAFORMER_API_KEY = 'sk-ccc';
+    constants.PARAFORMER_API_TASK_URL = 'https://dashscope.aliyuncs.com/api/v1/tasks/';
+
+    // 通义千问语言大模型配置
+    constants.LLM_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+    constants.LLM_API_KEY = 'sk-ccc';
+
     // Default Dropbox API key will not work
     if ( !_.contains(constants.DEFAULTHOSTS, location.host) ) {
         constants.DROPBOXKEYNEED = true;

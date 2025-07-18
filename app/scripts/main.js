@@ -80,6 +80,8 @@ requirejs.config({
         blobjs                : '../bower_components/Blob/Blob',
         fileSaver             : '../bower_components/FileSaver/FileSaver',
         recordrtc             : '../bower_components/recordrtc/RecordRTC.min',
+        'ali-oss'             : '../bower_components/ali-oss/dist/aliyun-oss-sdk.min',
+        axios                 : '../bower_components/axios/dist/axios.min',
         enquire               : '../bower_components/enquire/dist/enquire.min',
         hammerjs              : '../bower_components/hammerjs/hammer',
         jHammer               : '../bower_components/jquery-hammerjs/jquery.hammer',

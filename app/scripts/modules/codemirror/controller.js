@@ -11,6 +11,9 @@ define([
 	'jquery',
     'marionette',
     'backbone.radio',
+    'ali-oss',
+    'axios',
+    'constants',
     'codemirror/lib/codemirror',
     'modules/codemirror/views/editor',
     'codemirror/mode/gfm/gfm',
@@ -21,7 +24,7 @@ define([
     'codemirror/keymap/emacs',
     'codemirror/keymap/sublime',
     'recordrtc'
-], function(_, $, Marionette, Radio, CodeMirror, View) {
+], function(_, $, Marionette, Radio, OSS, axios, constants, CodeMirror, View) {
     'use strict';
 
     /**
@@ -87,7 +90,8 @@ define([
                 'get:data'      : this.getData,
                 'generate:link' : this.generateLink,
                 'generate:image': this.generateImage,
-                'ai:summary:recording': this.getRecording
+                'ai:summary:recording': this.getRecording,
+                'ai:summary:transcription': this.generateSummary,
             }, this);
 
 			// Init footer to show current line numbers
@@ -240,25 +244,155 @@ define([
             console.log('Step into aiSummaryAction');
             this.getRecording().then((blob) => {
                 if (blob) {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
                     const now = new Date();
                     const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
-                    a.download = `recording_${timestamp}.mp3`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
+                    const fileName = `recording_${timestamp}.mp3`;
 
-                    // TODO: 将生成的 MP3 文件 attach 到 editor 中
-                    //const file = new File([blob], `recording_${timestamp}.mp3`, { type: 'audio/mpeg' });
-                    // Radio.request('editor', 'attach:file', file);
+                    // 初始化OSS客户端
+                    const client = new OSS({
+                        region: constants.OSS_REGION,
+                        accessKeyId: constants.OSS_ACCESS_KEY_ID,
+                        accessKeySecret: constants.OSS_ACCESS_KEY_SECRET,
+                        authorizationV4: true,
+                        bucket: constants.OSS_BUCKET
+                    });
 
-                    // 触发 recordStart 图标切换
-                    console.log('Send event record state change');
+                    // 自定义请求头
+                    const headers = {
+                    'x-oss-storage-class': 'Standard', // 指定Object的存储类型。
+                    'x-oss-object-acl': 'public-read', // 指定Object的访问权限。
+                    'Content-Disposition': 'attachment; filename=' + fileName, // 通过文件URL访问文件时，指定以附件形式下载文件，下载后的文件名称定义为fileName。
+                    'x-oss-tagging': 'Tag1=1&Tag2=2', // 设置Object的标签，可同时设置多个标签。
+                    'x-oss-forbid-overwrite': 'true', // 指定PutObject操作时是否覆盖同名目标Object。此处设置为true，表示禁止覆盖同名Object。
+                    };
+
+                    // 上传文件到OSS
+                    client.put(fileName, blob, { headers }).then(result => {
+                        console.log('文件上传成功:', result);
+
+                        // 生成Markdown链接并插入编辑器
+                        const markdownLink = `## 课程录音附件\n\n[${fileName}](${result.url})` + "\n";
+                        this.editor.replaceSelection(markdownLink);
+
+                        const paraformerTaskCreator = axios.create({
+                            baseURL: 'https://dashscope.aliyuncs.com',
+                            headers: {
+                                'Authorization': 'Bearer ' + constants.PARAFORMER_API_KEY,
+                                'Content-Type': 'application/json',
+                                'X-DashScope-Async': 'enable'
+                            }
+                        });
+                        // Use axios to create paraformer task with result.url
+                        paraformerTaskCreator.post('/api/v1/services/audio/asr/transcription', {
+                                "model": "paraformer-v2",
+                                "input": { "file_urls": [ result.url ] },
+                                "parameters": { //仅v2及之后系列模型支持，v1系列模型不要使用该字段
+                                    //"vocabulary_id":"vocab-Xxxx", //最新热词ID，可选
+                                    "channel_id":[0], //音轨索引，可选
+                                    "disfluency_removal_enabled":false, //过滤语气词开关，可选
+                                    "timestamp_alignment_enabled": false, //是否启用时间戳校准功能，可选
+                                    //"special_word_filter": "xxx", //敏感词，可选
+                                    "language_hints":[ // 当前该参数仅适用于paraformer-v2模型，其他模型不要使用该字段
+                                        "zh",
+                                        "en"
+                                    ],
+                                    "diarization_enabled":false, //自动说话人分离，可选
+                                    //"speaker_count": 2 //说话人数量参考，可选
+                                }
+                            }
+                        )
+                        .then(response => {
+                            console.log('Paraformer API response:', response.data);
+                            const data = response.data;
+                            // Use axios to query paraformer task info.
+                            const taskStatus = data.output.task_status;
+                            if( taskStatus === 'SUCCEEDED' || taskStatus === 'PENDING' || taskStatus === 'RUNNING') {
+                                // Query task info
+                                const taskId = data.output.task_id;
+                                console.log(`Task created with (${taskStatus}), starting polling for task ID: ${taskId}`);
+
+                                // 设置轮询参数
+                                const pollInterval = 3000; // 3秒轮询一次
+                                const maxAttempts = 20; // 最大尝试次数
+                                let attempts = 0;
+
+                                // 轮询函数
+                                console.log('Start polling task status: ' + taskId);
+                                const pollTaskStatus = () => {
+                                    axios.get(constants.PARAFORMER_API_TASK_URL + taskId, {
+                                        headers: {
+                                            'Authorization': 'Bearer ' + constants.PARAFORMER_API_KEY,
+                                        },
+                                    }).then(response => {
+                                        const taskStatus = response.data.output.task_status;
+                                        const taskcode = response.data.output.code;
+                                        const taskQuiryData = response.data;
+                                        console.log(`Task status: ${taskStatus}`);
+
+                                        // 检查任务状态
+                                        if (taskStatus === 'SUCCEEDED') {
+                                            console.log('Task completed successfully');
+
+                                            const transcription_url = taskQuiryData.output.results[0].transcription_url;
+                                            axios.get(transcription_url)
+                                            .then(response => {
+                                                const transcription = "## 课程录音转写\n\n" + response.data.transcripts[0].text + "\n";
+                                                this.editor.replaceSelection(transcription);
+
+                                                // 轮询结束
+                                                console.log('Polling stopped');
+
+                                                // Send transcription to summary function
+                                                Radio.request('editor', 'ai:summary:transcription', transcription);
+                                            })
+                                            .catch(err => {
+                                                console.error('Error fetching transcription:', err);
+                                            });
+                                        } else if (taskStatus === 'FAILED') {
+                                            if(taskcode === "SUCCESS_WITH_NO_VALID_FRAGMENT") {
+                                                console.log('There is no valid content in audio');
+                                            } else {
+                                                console.error('Task failed');
+                                            }
+                                        } else {
+                                            // 继续轮询
+                                            attempts++;
+                                            if (attempts < maxAttempts) {
+                                                setTimeout(pollTaskStatus, pollInterval);
+                                            } else {
+                                                console.error('Max polling attempts reached');
+                                            }
+                                        }
+                                    })
+                                    .catch(err => {
+                                        console.error('Paraformer API response:', err);
+                                        attempts++;
+                                        if (attempts < maxAttempts) {
+                                            setTimeout(pollTaskStatus, pollInterval);
+                                        } else {
+                                            console.error('Max polling attempts reached');
+                                        }
+                                    });
+                                };
+
+                                // 首次调用轮询函数
+                                pollTaskStatus();
+                            } else {
+                                console.error('Paraformer Query task failed:', taskStatus);
+                            }
+                        }).catch(err => {
+                            console.error('Paraformer API response:', err);
+                            alert('Failed to create to Paraformer task, please check your network connection');
+                        });
+
+                    // 触发录音状态切换
+                    Radio.trigger('editor', 'editor:action', 'recordStart'); 
+                }).catch(err => {
+                    // 触发录音状态切换
                     Radio.trigger('editor', 'editor:action', 'recordStart');
+                    console.error('文件上传失败:', err);
+                    alert('音频上传失败, 请检查OSS配置或网络连接');
+                });
                 } else {
                     console.error('No recording available');
                 }
@@ -687,6 +821,42 @@ define([
             return '!' + this.generateLink(data);
         },
 
+        generateSummary: function(transcription) {
+            console.log('generateSummary with transcription: ', transcription);
+
+            // Generate the course title
+            var courseTitle = "## 课程笔记\n\n";
+            this.editor.replaceSelection(courseTitle);
+
+            axios.post(constants.LLM_API_URL, {
+                model: 'qwen-plus',
+                messages: [
+                        {
+                            role: 'user',
+                            content: '请你总结一下一段课程的文字, 总结的格式应该是markdown格式; \
+                            总结内容要有一个课程标题, 课程标题用###, 然后内容应该以点的形式展示, 每个点之间用换行符隔开; \
+                            如果在这段文字中有布置作业的内容, 请把作业内容总结出来, 并放在总结内容的最后一个段落, 作业标题的字号要比课程标题小一级, 如果没有作业, 就在作业内容中写无; \
+                            如果在这段文字中有布置课堂练习的内容, 请把课堂练习内容总结出来, 并用单独的课堂练习段落展示, 课堂练习标题的字号要比课程标题小一级; \
+                            文字的内容如下: \n' + transcription
+                        }
+                    ]
+                }, { headers: {
+                        'Authorization': 'Bearer ' + constants.LLM_API_KEY,
+                        'Content-Type': 'application/json'
+                    }
+            }).then((response) => {
+                console.log('generateSummary response: ', response);
+
+                // 从response中提取总结内容
+                var summary = response.data.choices[0].message.content;
+                console.log('generateSummary summary: \n' + summary);
+
+                // 将总结内容添加到编辑器中
+                this.editor.replaceSelection(summary);
+            }).catch((error) => {
+                console.log('generateSummary error: ', error.response);  
+            });
+        },
     });
 
     return Controller;
