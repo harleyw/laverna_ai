@@ -6,7 +6,9 @@ var finalhandler = require('finalhandler'),
     serve,
     server;
 
-serve  = serveStatic(__dirname + '/dist', {index: ['index.html']});
+const path = require('path');
+
+serve  = serveStatic(path.join(__dirname, 'app'), {index: ['index.html']});
 
 server = http.createServer(function(req, res) {
     var done = finalhandler(req, res);

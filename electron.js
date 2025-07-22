@@ -49,7 +49,7 @@ appHelper = {
     page: 'http://localhost:9000/',
 
     // Icon of the app
-    icon: path.join(__dirname, '/dist/images/icon/',
+    icon: path.join(__dirname, '/app/images/icon/',
       process.platform === 'darwin' ? 'IconMenubarTemplate.png' : 'icon-120x120.png'
     ),
 
@@ -141,6 +141,8 @@ appHelper = {
      * Electron is ready.
      */
     onReady: function() {
+        app.commandLine.appendSwitch('disable-web-security');
+        app.commandLine.appendSwitch('user-data-dir', path.join(__dirname, 'temp-user-data'));
         this
         .startServer()
         // .interceptProtocol()

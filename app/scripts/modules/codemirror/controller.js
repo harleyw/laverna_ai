@@ -351,6 +351,7 @@ define([
                                         } else if (taskStatus === 'FAILED') {
                                             if(taskcode === "SUCCESS_WITH_NO_VALID_FRAGMENT") {
                                                 console.log('There is no valid content in audio');
+                                                this.editor.replaceSelection("## 课程录音转写\n\n" + "无有效内容" + "\n");
                                             } else {
                                                 console.error('Task failed');
                                             }

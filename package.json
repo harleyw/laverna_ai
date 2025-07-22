@@ -1,16 +1,28 @@
 {
-  "name": "laverna",
+  "name": "laverna_ai",
+  "description": "Laverna AI which can record the course and summary it into notebook",
   "version": "0.7.51",
   "license": "MPL-2.0",
+  "author": "harleyw",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Laverna/laverna"
+    "url": "https://github.com/harleyw/laverna_ai"
   },
   "scripts": {
     "start": "node ./server.js",
     "electron": "NODE_ENV=dev electron .",
     "karma": "./node_modules/.bin/karma start",
-    "test:karma": "./node_modules/.bin/karma start --single-run"
+    "test:karma": "./node_modules/.bin/karma start --single-run",
+    "package-win": "electron-builder --win"
+  },
+  "build": {
+    "files": [
+      "**/*",
+      "!node_modules/**/*.ts",
+      "!node_modules/**/test{,s}/**",
+      { "from": "node_modules", "to": "node_modules" }
+    ],
+    "asar": true
   },
   "main": "electron.js",
   "dependencies": {
