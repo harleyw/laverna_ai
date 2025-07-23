@@ -114,7 +114,7 @@ appHelper = {
                         if (focusedWindow) { focusedWindow.reload(); }
                     }
                 },
-                {
+                ...(process.env.NODE_ENV === 'dev' ? [{
                     label       : 'Toggle Developer Tools',
                     accelerator : process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
                     click       : function(item, focusedWindow) {
@@ -122,7 +122,7 @@ appHelper = {
                             focusedWindow.webContents.toggleDevTools();
                         }
                     }
-                }
+                }] : [])
             ]
         },
     ],
@@ -219,7 +219,7 @@ appHelper = {
         win.loadURL(this.page);
 
         // Show development tools
-        if (process.env.NODE_ENV === 'dev' || argv.dev) {
+        if (process.env.NODE_ENV === 'dev') {
             win.webContents.openDevTools();
         }
 
@@ -255,8 +255,13 @@ appHelper = {
         icon.setToolTip('Laverna');
         icon.setContextMenu(menu);
 
-        // Auto hide to tray on start
-        if (argv.tray) {
+        // Only process command line arguments in development environment
+        let argv = {};
+        if (process.env.NODE_ENV === 'dev') {
+            argv = require('minimist')(process.argv.slice(1));
+        }
+        // Auto hide to tray on start - only in development
+        if (process.env.NODE_ENV === 'dev' && argv.tray) {
             win.hide();
         }
 

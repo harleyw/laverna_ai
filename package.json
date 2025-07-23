@@ -13,14 +13,25 @@
     "electron": "NODE_ENV=dev electron .",
     "karma": "./node_modules/.bin/karma start",
     "test:karma": "./node_modules/.bin/karma start --single-run",
-    "package-win": "electron-builder --win"
+    "package-win": "NODE_ENV=production electron-builder --win"
   },
   "build": {
     "files": [
       "**/*",
-      "!node_modules/**/*.ts",
-      "!node_modules/**/test{,s}/**",
-      { "from": "node_modules", "to": "node_modules" }
+      "!**/*.map",
+      "!README.md",
+      "!CONTRIBUTE.md",
+      "!LICENSE",
+      "!test/**/*",
+      { "from": "node_modules", 
+        "to": "node_modules",
+        "filter": [
+          "**/package.json",
+          "**/*.js",
+          "**/*.json",
+          "!**/{test,__tests__}/**"
+        ]
+      }
     ],
     "asar": true
   },
@@ -47,6 +58,7 @@
     "del": "^2.2.1",
     "dev-ip": "^1.0.1",
     "electron-builder": "^26.0.12",
+    "javascript-obfuscator": "^4.1.0",
     "gulp": "^3.9.1",
     "gulp-autoprefixer": "^3.1.0",
     "gulp-clean-css": "^2.0.12",
